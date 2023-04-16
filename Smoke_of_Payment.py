@@ -68,7 +68,7 @@ class TestAPI:
         TestAPI.paymentUrl = response.json()["paymentUrl"]
         assert TestAPI.paymentUrl != "", "paymentUrl does not exist"
 
-    def test_FrontButton(self):
+    def test_frontbutton(self):
         browser = webdriver.Chrome()
         browser.get(TestAPI.paymentUrl)
         time.sleep(1)
