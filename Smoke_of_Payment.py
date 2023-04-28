@@ -6,17 +6,18 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 import hashlib
 
-
+# use python -m pytest -x -rA Smoke_of_Payment.py to run
 class TestAPI:
     TransId = 0
     paymentUrl = ""
     SecretKey = "a0d50f34-c0a0-4353-9561-195ddaf50be9"
     url = "http://109.202.9.135:7706"
+    price_count = 40000
 
     def test_pay(self, ApiUrl=url):
         mthd = "/pay"
         ts = int(time.time())
-        randOrderID = (int(time.time() * 1000)) % 100000000
+        randOrderID = ((int(time.time() * 1000)) % 100000000) + 100000000
         ForHash = str(ts) + str(randOrderID) + TestAPI.SecretKey
         CurrSIGN = str(hashlib.sha256(ForHash.encode()).hexdigest())
         data = {
@@ -26,8 +27,8 @@ class TestAPI:
             "userId": "1",
             "staff": [
                 {
-                    "description": "New",
-                    "price": 400000,
+                    "description": "TESTENG",
+                    "price": TestAPI.price_count,
                     "qty": 1000,
                     "PayAttribute": 1,
                     "lineAttribute": 1,
@@ -40,30 +41,34 @@ class TestAPI:
                     }
                 }
             ],
-            "TotalPrice": 400000,
+            "TotalPrice": TestAPI.price_count,
             "backRef": "http://megadyyken.com/thankyou",
             "userPhoneOrEmail": "s.rozhkov@integrasources.com",
             "timestamp": ts,
             "sign": CurrSIGN
         }
-        response = requests.post(ApiUrl + mthd, json=data)  # запрос /pay
-        print(f"\n {mthd}'s response: {response.text}\n")
-        assert response.status_code == 200, "Status code isn't equal 200"
-        TestAPI.TransId = response.json()["transactionId"]
-        assert TestAPI.TransId > 100100, "Transaction ID is less than 100100"
+        try:
+            response = requests.post(ApiUrl + mthd, json=data)  # запрос /pay
+        except requests.exceptions.ConnectionError:
+            assert False, "Ошибка соединения с сервером"
+        else:
+            print(f"\n {mthd}'s response: {response.text}\n")
+            assert response.status_code == 200, "Status code isn't equal 200"
+            TestAPI.TransId = response.json()["transactionId"]
+            assert TestAPI.TransId > 100100, "Transaction ID is less than 100100"
 
     def test_getUrl_of_pay(self, ApiUrl=url):
         mthd = "/getPaymentUrl"
         data = {"transactionId": TestAPI.TransId}
         headers = {"Accept": "application/json"}
-        for i in range(10):
+        for i in range(15):
             response = requests.get(ApiUrl + mthd, params=data, headers=headers)  # запрос /get
             assert response.status_code == 200, "Status code isn't equal 200"
             statusCode = response.json()["statusCode"]
             if statusCode == "1":
                 break
-            time.sleep(2)
-        print(f"\n {mthd}'s response: {response.text}\n")
+            time.sleep(3)
+        print(f"\n {mthd}'s response: {response.json()}\n")
         assert statusCode == "1", "Status code is not 1"
         TestAPI.paymentUrl = response.json()["paymentUrl"]
         assert TestAPI.paymentUrl != "", "paymentUrl does not exist"
@@ -89,11 +94,11 @@ class TestAPI:
             if "ofdChequeFormatter" in response.json():
                 break
             time.sleep(2)
-        print(f"\n {mthd}'s response: {response.text}\n")
+        print(f"\n {mthd}'s response: {response.json()}\n")
         assert "status" in response.json(), "There is no the 'status' field in the response"
         assert response.json()["status"] == "SUCCESS", "Status of the payment is not SUCCESS"
         assert "transType" in response.json(), "There is no the 'transType' field in the response"
-        assert response.json()["transType"] == "TRANSFER", "Type of the payment is not TRANSFER"
+        assert response.json()["transType"] == "TRANSFER", "Type of the transaction is not TRANSFER"
         # assert "ofdChequeFormatter" in response.json(), "There is no the Cheque in the response"
         assert response.json()["ofdChequeFormatter"] != "", "Cheque is not exist"
         assert response.status_code == 200, "Status code isn't equal 200"
@@ -108,8 +113,8 @@ class TestAPI:
             "refundAmount": 0,
             "staff": [
                 {
-                    "description": "New",
-                    "price": 400000,
+                    "description": "TESTENG",
+                    "price": TestAPI.price_count,
                     "qty": 1000,
                     "PayAttribute": 1,
                     "lineAttribute": 1,
@@ -135,8 +140,10 @@ class TestAPI:
         mthd = "/getTransactionStatus"
         data = {"transactionId": TestAPI.TransId}
         headers = {"Accept": "application/json"}
+        time.sleep(2)
         for i in range(10):
             response = requests.get(ApiUrl + mthd, params=data, headers=headers)  # запрос /getTransactionStatus
+            assert "statusCode" in response.json(), "There is no the 'statusCode' field in the response"
             statusCode = response.json()["statusCode"]
             if statusCode == "1":
                 break
@@ -152,11 +159,11 @@ class TestAPI:
         headers = {"Accept": "application/json"}
         time.sleep(3)  # вынужденная задержка, чек приходит не сразу в BackOffice
         response = requests.get(TestAPI.url + mthd, params=data, headers=headers)  # запрос /transaction
-        print(f"\n {mthd}'s response: {response.text}\n")
+        print(f"\n {mthd}'s response: {response.json()}\n")
         assert "status" in response.json(), "There is no the 'status' field in the response"
         assert response.json()["status"] == "SUCCESS", "Status of the payment is not SUCCESS"
         assert "transType" in response.json(), "There is no the 'transType' field in the response"
-        assert response.json()["transType"] == "TRANSFER", "Type of the payment is not TRANSFER"
+        assert response.json()["transType"] == "REFUND_TRANSFER", "Type of the transaction is not REFUND_TRANSFER"
         assert "ofdChequeFormatter" in response.json(), "There is no the Cheque in the response"
         assert response.json()["ofdChequeFormatter"] != "", "Cheque is not exist"
         assert response.status_code == 200, "Status code isn't equal 200"
@@ -185,5 +192,5 @@ class TestAPI:
 # else:
 #     print(f"The {keyToTest} key is not found")
 
-# Эта херня не работает, если искомый ключ действительно есть в теле запроса. Есть мысли, что таким образом не будет нужды проверять тело ответов.
+# Это не работает, если искомый ключ действительно есть в теле запроса. Есть мысли, что таким образом не будет нужды проверять тело ответов.
 # Тест проверки присутствия ключа
